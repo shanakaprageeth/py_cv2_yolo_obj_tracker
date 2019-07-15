@@ -217,14 +217,14 @@ def main():
                     logging.debug(track_details)
                     if(track_object.last_loc_x < margin_x and track_object.last_loc_x+track_object.dir_x > margin_x ):
                         # prevent double entry object already in cannot go again in
-                        if(idx not in tracket_obj_in):
+                        if(idx not in tracked_objs_in):
                             total_in += 1
-                            tracket_obj_in.append(idx)
+                            tracked_objs_in.append(idx)
                     elif(track_object.last_loc_x > margin_x and track_object.last_loc_x+track_object.dir_x < margin_x ):
                         # prevent double entry
-                        if(idx not in tracket_obj_out):
+                        if(idx not in tracked_objs_out):
                             total_out += 1
-                            tracket_obj_out.append(idx)
+                            tracked_objs_out.append(idx)
                     else:
                         # all the other objects that doesn't pass the boundry or stationary
                         pass
