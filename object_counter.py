@@ -13,7 +13,7 @@ import cv2
 import imutils
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-v', '--video', default='test2.mp4',
+parser.add_argument('-v', '--video', default='input.mp4',
                     help='video stream')
 parser.add_argument('-c', '--config', default='yolov3.cfg',
                     help='yolo config file')
@@ -36,6 +36,7 @@ SAVE_CSV = True
 TRACK = True
 # save output video
 VID_OUT = True
+
 
 class Track_Object:    
     obj_type=-1
@@ -76,7 +77,7 @@ def main():
     tracked_objs_out = []
 
     # capture the video stream
-    cap = cv2.VideoCapture(args.video)
+    cap = cv2.VideoCapture(args.video)    
     # load labels names
     labels = []
     with open(args.labels, 'r') as f:
@@ -94,7 +95,8 @@ def main():
     net = cv2.dnn.readNet(args.weights, args.config)
     # identify output layer of the NN
     output_layer = net.getUnconnectedOutLayersNames()
-
+    vid_init = None
+    vid_out=None
     while (True):        
         start_t = cv2.getTickCount()
         total_in_screen = 0
@@ -103,7 +105,7 @@ def main():
         # use follwoing line if Umat
         # ret, Oframe = cap.read()
         if not ret:
-            logging.error("failed to capture the frame")
+            logging.warning("failed to capture the frame")
             break
         # umat should make things faster but difficult to workwith in python 
         # should use C++ cuda
@@ -113,11 +115,12 @@ def main():
         [frame_height, frame_width, *frame_rest] = frame.shape
         # use follwoing line if Umat
         #[frame_height, frame_width, *frame_rest] = Oframe.shape
-        vid_init = None
-        out = None
         if(VID_OUT and not vid_init):
+            vid_init = True
             # opencv write video to a file.
-            vid_out = cv2.VideoWriter('output.avi',cv2.VideoWriter_fourcc('M','J','P','G'), 10, (frame_width,frame_height))
+            # Define the codec and create VideoWriter object
+            fourcc = cv2.VideoWriter_fourcc(*'XVID')
+            vid_out = cv2.VideoWriter('output.avi',fourcc, 20.0, (frame_width,frame_height))
         # preprocessing the image to size for CNN spatial size
         blob = cv2.dnn.blobFromImage(
             frame, scale_factor, (in_width, in_height), RGB_mean, swapRB, crop=False)
@@ -218,16 +221,20 @@ def main():
                     if(track_object.last_loc_x < margin_x and track_object.last_loc_x+track_object.dir_x > margin_x ):
                         # prevent double entry object already in cannot go again in
                         if(idx not in tracked_objs_in):
-                            total_in += 1
                             tracked_objs_in.append(idx)
+                            if(idx in tracked_objs_out):
+                                tracked_objs_out.remove(idx)
                     elif(track_object.last_loc_x > margin_x and track_object.last_loc_x+track_object.dir_x < margin_x ):
                         # prevent double entry
                         if(idx not in tracked_objs_out):
-                            total_out += 1
                             tracked_objs_out.append(idx)
+                            if(idx in tracked_objs_in):
+                                tracked_objs_in.remove(idx)
                     else:
                         # all the other objects that doesn't pass the boundry or stationary
                         pass
+                    total_in = len(tracked_objs_in)
+                    total_out = len(tracked_objs_out)
 
                 # draw a in out margin
                 cv2.line(frame, (margin_x,0),(margin_x, margin_y), (0,0,255), 1)
@@ -260,9 +267,11 @@ def main():
             break
 
     # clean up release and distroy opencv windows
+    logging.info("cleaning up the app")
     fp.close()
     cap.release()
-    vid_out.release()
+    if (VID_OUT and vid_init):
+        vid_out.release()
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
