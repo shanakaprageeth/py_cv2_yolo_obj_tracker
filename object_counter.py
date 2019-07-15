@@ -72,6 +72,8 @@ def main():
     total_out = 0
     # track objects
     tracked_objects = []
+    tracked_objs_in = []
+    tracked_objs_out = []
 
     # capture the video stream
     cap = cv2.VideoCapture(args.video)
@@ -214,9 +216,15 @@ def main():
                     track_details = "x  :{1}   y :{2}".format(idx,track_object.last_loc_x, track_object.last_loc_y)
                     logging.debug(track_details)
                     if(track_object.last_loc_x < margin_x and track_object.last_loc_x+track_object.dir_x > margin_x ):
-                        total_in += 1
+                        # prevent double entry object already in cannot go again in
+                        if(idx not in tracket_obj_in):
+                            total_in += 1
+                            tracket_obj_in.append(idx)
                     elif(track_object.last_loc_x > margin_x and track_object.last_loc_x+track_object.dir_x < margin_x ):
-                        total_out += 1
+                        # prevent double entry
+                        if(idx not in tracket_obj_out):
+                            total_out += 1
+                            tracket_obj_out.append(idx)
                     else:
                         # all the other objects that doesn't pass the boundry or stationary
                         pass
