@@ -1,5 +1,5 @@
 __author__ = 'shanaka prageeth'
-__description__ = 'This script identify labels in video streams'
+__description__ = 'This script identify objects in video streams'
 
 # common packages
 import datetime
@@ -28,15 +28,21 @@ parser.add_argument('-sy', '--sizey', default=416, type=int,
 args = parser.parse_args()
 
 # logger setup
-FORMAT = "%(asctime)-15s %(message)s"
-logging.basicConfig(level=logging.INFO,format=FORMAT)
+logging.basicConfig(level=logging.INFO)
 
+# save_csv
+SAVE_CSV = True
+# track objects
+TRACK = True
+# save output video
+VID_OUT = True
 
-class Track_Object:
+class Track_Object:    
+    obj_type=-1
     last_loc_x=-1
     last_loc_y=-1
-    obj_type=-1
-
+    dir_x=0
+    dir_y=0
     def __init__(self, obj_type, last_loc_x,last_loc_y):
         self.obj_type = obj_type
         self.last_loc_x = last_loc_x
@@ -60,9 +66,10 @@ def main():
 
     # on object numbers
     total_in_screen = 0
-    text_in = 0
-    text_out = 0
+    total_in = 0
+    total_out = 0
     # track objects
+    tracked_objects = []
 
     # capture the video stream
     cap = cv2.VideoCapture(args.video)
@@ -77,7 +84,8 @@ def main():
     # to improve timing set flags
     filter_label_active = [True if (itm in filter_labels) else False for itm in labels]
     for idx,itm in enumerate(labels):        
-        logging.debug(itm, filter_label_active[idx])
+        logging.debug(itm)
+        logging.debug(filter_label_active[idx])
     # read DNN into cv2 dnn format
     net = cv2.dnn.readNet(args.weights, args.config)
     # identify output layer of the NN
@@ -154,9 +162,59 @@ def main():
             # draw a rectangle
             cv2.rectangle(frame, (x, y), (x+w, y+h), color, 1)
             # draw label
-            cv2.putText(frame, label, (x-10, y-10),cv2.FONT_HERSHEY_TRIPLEX, 0.2, color, 1)
+            cv2.putText(frame, label, (x, y-15),cv2.FONT_HERSHEY_TRIPLEX, 0.4, color, 1)
 
             # tracking
+            # if no object is there
+            if(TRACK):
+                #tracking variables
+                max_move = frame_width//8
+                # divide the frame by 2 on x direction
+                margin_x = frame_width //2
+                margin_y = frame_height
+                obj_idx = 0
+                if (len(tracked_objects)==0):
+                    tracked_objects.append(Track_Object(label_idxs[i], cx,cy))
+                # if objects are available
+                else:
+                    match_found = False
+                    for idx,track_object in enumerate(tracked_objects):
+                        # check objects that were close for a match
+                        dir_x = track_object.last_loc_x - cx
+                        if (abs(dir_x)<max_move):
+                            dir_y = track_object.last_loc_y - cy
+                            if (abs(dir_y)<max_move):
+                                track_object.dir_x=round(dir_x,2)
+                                track_object.dir_y=round(dir_y,2)
+                                track_object.last_loc_x=cx
+                                track_object.last_loc_y=cy
+                                obj_idx = idx
+                                match_found = True
+                    if(not match_found):
+                        obj_idx = len(tracked_objects)
+                        tracked_objects.append(Track_Object(label_idxs[i], cx,cy))
+                # print additional details about tracking and inward outward counts
+                total_in = 0
+                total_out = 0
+                for idx,track_object in enumerate(tracked_objects):
+                    cv2.putText(frame, str(idx), (cx+15, cy-+15),cv2.FONT_HERSHEY_TRIPLEX, 0.4, color, 1)
+                    track_details = "x` :  {1} y`  :   {2}".format(idx,track_object.dir_x, track_object.dir_y)
+                    cv2.putText(frame, track_details, (x, y-5),cv2.FONT_HERSHEY_TRIPLEX, 0.4, color, 1)
+                    logging.debug(str(idx))
+                    logging.debug(track_details)
+                    track_details = "x  :  {1} y   :  {2}".format(idx,track_object.last_loc_x, track_object.last_loc_y)
+                    logging.debug(track_details)
+                    if(track_object.last_loc_x < margin_x and track_object.last_loc_x+track_object.dir_x > margin_x ):
+                        total_in += 1
+                    elif(track_object.last_loc_x > margin_x and track_object.last_loc_x+track_object.dir_x < margin_x ):
+                        total_out += 1
+                    else:
+                        # all the other objects that doesn't pass the boundry or stationary
+                        pass
+
+                # draw a in out margin
+                cv2.line(frame, (margin_x,0),(margin_x, margin_y), (0,0,255), 1)
+                    
 
         # fps calculation
         fps = 1/((cv2.getTickCount()-start_t)/cv2.getTickFrequency())        
@@ -168,12 +226,13 @@ def main():
         cv2.putText(frame, "Total: {}".format(str(total_in_screen)), 
             (text_start_x, text_start_y+text_seperation*1),
                     cv2.FONT_HERSHEY_TRIPLEX, 0.5, (255, 0, 0), 2)
-        cv2.putText(frame, "Inward: {}".format(str(text_in)), 
-            (text_start_x, text_start_y+text_seperation*2),
-                    cv2.FONT_HERSHEY_TRIPLEX, 0.5, (255, 0, 0), 2)
-        cv2.putText(frame, "Outward: {}".format(str(text_out)), 
-            (text_start_x, text_start_y+text_seperation*3),
-                    cv2.FONT_HERSHEY_TRIPLEX, 0.5, (255, 0, 0), 2)
+        if(TRACK):
+            cv2.putText(frame, "Inward: {}".format(str(total_in)), 
+                (text_start_x, text_start_y+text_seperation*2),
+                        cv2.FONT_HERSHEY_TRIPLEX, 0.5, (255, 0, 0), 2)
+            cv2.putText(frame, "Outward: {}".format(str(total_out)), 
+                (text_start_x, text_start_y+text_seperation*3),
+                        cv2.FONT_HERSHEY_TRIPLEX, 0.5, (255, 0, 0), 2)
         cv2.putText(frame, "FPS: {}".format(str(round(fps,2))), 
             (text_start_x, text_start_y+text_seperation*4),
                     cv2.FONT_HERSHEY_TRIPLEX, 0.5, (255, 0, 0), 2)
@@ -182,7 +241,7 @@ def main():
             break
 
     # clean up release and distroy opencv windows 
-    camera.release()
+    cap.release()
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
