@@ -49,6 +49,8 @@ class Track_Object:
         self.last_loc_y = last_loc_y
 
 def main():
+    if(SAVE_CSV):
+        fp = open("output.log","w") 
     # is cv2 optimized
     if(not cv2.useOptimized()):
         cv.setUseOptimized(True)
@@ -97,7 +99,7 @@ def main():
         # Capture frame-by-frame
         ret, frame = cap.read()
         # use follwoing line if Umat
-        ret, Oframe = cap.read()
+        # ret, Oframe = cap.read()
         if not ret:
             logging.error("failed to capture the frame")
             break
@@ -109,6 +111,11 @@ def main():
         [frame_height, frame_width, *frame_rest] = frame.shape
         # use follwoing line if Umat
         #[frame_height, frame_width, *frame_rest] = Oframe.shape
+        vid_init = None
+        out = None
+        if(VID_OUT and not vid_init):
+            # opencv write video to a file.
+            vid_out = cv2.VideoWriter('output.avi',cv2.VideoWriter_fourcc('M','J','P','G'), 10, (frame_width,frame_height))
         # preprocessing the image to size for CNN spatial size
         blob = cv2.dnn.blobFromImage(
             frame, scale_factor, (in_width, in_height), RGB_mean, swapRB, crop=False)
@@ -163,7 +170,9 @@ def main():
             cv2.rectangle(frame, (x, y), (x+w, y+h), color, 1)
             # draw label
             cv2.putText(frame, label, (x, y-15),cv2.FONT_HERSHEY_TRIPLEX, 0.4, color, 1)
-
+            if(SAVE_CSV):
+                fp.write("{},{},{},{},{},{}\n".format(
+                    datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), label, cx, cy, w, h))
             # tracking
             # if no object is there
             if(TRACK):
@@ -194,15 +203,15 @@ def main():
                         obj_idx = len(tracked_objects)
                         tracked_objects.append(Track_Object(label_idxs[i], cx,cy))
                 # print additional details about tracking and inward outward counts
-                total_in = 0
-                total_out = 0
+                #total_in = 0
+                #total_out = 0
                 for idx,track_object in enumerate(tracked_objects):
                     cv2.putText(frame, str(idx), (cx+15, cy-+15),cv2.FONT_HERSHEY_TRIPLEX, 0.4, color, 1)
-                    track_details = "x` :  {1} y`  :   {2}".format(idx,track_object.dir_x, track_object.dir_y)
+                    track_details = "x` :{1}   y`:{2}".format(idx,track_object.dir_x, track_object.dir_y)
                     cv2.putText(frame, track_details, (x, y-5),cv2.FONT_HERSHEY_TRIPLEX, 0.4, color, 1)
                     logging.debug(str(idx))
                     logging.debug(track_details)
-                    track_details = "x  :  {1} y   :  {2}".format(idx,track_object.last_loc_x, track_object.last_loc_y)
+                    track_details = "x  :{1}   y :{2}".format(idx,track_object.last_loc_x, track_object.last_loc_y)
                     logging.debug(track_details)
                     if(track_object.last_loc_x < margin_x and track_object.last_loc_x+track_object.dir_x > margin_x ):
                         total_in += 1
@@ -237,11 +246,15 @@ def main():
             (text_start_x, text_start_y+text_seperation*4),
                     cv2.FONT_HERSHEY_TRIPLEX, 0.5, (255, 0, 0), 2)
         cv2.imshow("Live Feed", frame)
+        if(VID_OUT):
+            vid_out.write(frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-    # clean up release and distroy opencv windows 
+    # clean up release and distroy opencv windows
+    fp.close()
     cap.release()
+    vid_out.release()
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
